@@ -1,0 +1,8 @@
+study("Osc")
+
+Period = input(title="Period Cycle", type=integer , defval=12)
+
+lastyear = (close - close[1*Period]) / close[1*Period]
+scolor = lastyear >= 0 ? aqua : purple
+hline(0)
+plot(lastyear*10, color=scolor, offset = 0, style=area)
