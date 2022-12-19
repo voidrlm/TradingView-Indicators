@@ -1,0 +1,1328 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © voidrlm
+
+//@version=5
+
+indicator(title='VOIDRLM', shorttitle='VOIDRLM', overlay=true)
+
+ 
+pivottimeframe = input.string(title='Pivot TF-----------------------Pivots', defval='D', options=['D', 'W', 'M', '60'])
+dp = input(false, title='Pivots ')
+
+
+enable_vwap = input(false, title='VWAP------------------------------VWAP') , 
+
+enable_1a = input(false, title='MA 1 -------------------------------Moving Averages')
+enable_1am = input.int(20, minval=1, title="Length")
+enable_1b = input(false, title='MA 2 ')
+enable_1bm = input.int(50, minval=1, title="Length")
+enable_1c = input(false, title='MA 3 ')
+enable_1cm = input.int(200, minval=1, title="Length")
+exponential = input(false, title='Change To Exponential MA')
+enable_macloud = input(false, title='MA Cloud')
+typeofMA1 = input.string(title='MACloud Type', defval='SMA', options=['RMA', 'SMA', 'EMA', 'WMA', 'VWMA', 'SMMA', 'TMA', 'HullMA', 'DEMA', 'TEMA', 'VWAP'])
+cloudfillmalength_ma1 = input(20, title='MA1 Cloud')
+cloudfillmalength_ma2 = input(50, title='MA2 Cloud')
+adma = input(false, title='Enable DMA')
+dmalen = input.int(3, minval=1, title='DMA Length')
+
+dhighs          =   input(true, title='Supply Zone-----------------------Zones ')
+dlows           =  input(true, title='Demand Zone ')
+
+
+a_Show_Primary = input(false, title='Trendlines--------------------------Trendline')
+a_Rising_Upper_Falling_Lower = false
+a_len = input(50, title='Trendline History')
+a_Extensions = input.string(title='Trendline Extension', defval=' 500', options=['Unlimited', '  25', '  50', '  75', ' 100', ' 150', ' 200', ' 300', ' 400', ' 500', ' 750', '1000'])
+
+
+macross = input(false, title='MA Cross Alert----------------------Alerts')
+emacross = input(false, title='EMA Cross Alert')
+mcross = input(false, title='MACD Crossover Alert')
+suptrnd = input(false, title='Supertrend Alert')
+srsicross = input(false, title='Stochastic RSI Alert')
+bbc = input(true, title='Bollinger Bands Alert ')
+don = input(false, title='Donchian Channel Alert  ')
+displayVolumeLabel = input(false, title='Volume Spike')
+showlabelswm = input(false, title='Previous wWeek & Month Levels----High/Low')
+offset_val = 20
+disp_p_hllabels = input(false, title='HL Labels')
+
+
+monthH = request.security(syminfo.tickerid, 'M', high)[1]
+monthL = request.security(syminfo.tickerid, 'M', low)[1]
+
+weekH = request.security(syminfo.tickerid, 'W', high)[1]
+weekL = request.security(syminfo.tickerid, 'W', low)[1]
+
+plot(showlabelswm ? monthH : na, title='Monthly High', style=plot.style_line, linewidth=2, color=color.new(color.aqua, 0), show_last=1, trackprice=true, offset=offset_val)
+plot(showlabelswm ? monthL : na, title='Monthly Low', style=plot.style_line, linewidth=2, color=color.new(color.aqua, 0), show_last=1, trackprice=true, offset=offset_val)
+plot(showlabelswm ? weekH : na, title='Weekly High', style=plot.style_line, linewidth=2, color=color.new(color.purple, 0), show_last=1, trackprice=true, offset=offset_val)
+plot(showlabelswm ? weekL : na, title='Weekly Low', style=plot.style_line, linewidth=2, color=color.new(color.purple, 0), show_last=1, trackprice=true, offset=offset_val)
+
+
+plotshape(showlabelswm ? monthH : na, style=shape.labeldown, location=location.absolute, color=color.aqua, textcolor=color.new(color.gray, 0), show_last=1, text='Month High', offset=offset_val, transp=50)
+plotshape(showlabelswm ? monthL : na, style=shape.labelup, location=location.absolute, color=color.aqua, textcolor=color.new(color.gray, 0), show_last=1, text='Month Low', offset=offset_val, transp=50)
+plotshape(showlabelswm ? weekH : na, style=shape.labeldown, location=location.absolute, color=color.purple, textcolor=color.new(color.gray, 0), show_last=1, text='Week High', offset=offset_val, transp=50)
+plotshape(showlabelswm ? weekL : na, style=shape.labelup, location=location.absolute, color=color.purple, textcolor=color.new(color.gray, 0), show_last=1, text='Week Low', offset=offset_val, transp=50)
+
+l_size = 'small'
+dpopen = request.security(syminfo.tickerid, pivottimeframe, open[1], barmerge.gaps_off, barmerge.lookahead_on)
+dphigh = request.security(syminfo.tickerid, pivottimeframe, high[1], barmerge.gaps_off, barmerge.lookahead_on)
+dplow = request.security(syminfo.tickerid, pivottimeframe, low[1], barmerge.gaps_off, barmerge.lookahead_on)
+dpclose = request.security(syminfo.tickerid, pivottimeframe, close[1], barmerge.gaps_off, barmerge.lookahead_on)
+dprange = dphigh - dplow
+pivot = (dphigh + dplow + dpclose) / 3.0
+bc = (dphigh + dplow) / 2.0
+tc = pivot - bc + pivot
+r1 = pivot * 2 - dplow
+r2 = pivot + dphigh - dplow
+r3 = r1 + dphigh - dplow
+s1 = pivot * 2 - dphigh
+s2 = pivot - (dphigh - dplow)
+s3 = s1 - (dphigh - dplow)
+nround(x) =>
+    n = math.round(x / syminfo.mintick) * syminfo.mintick
+    n
+previous_values = false
+display_value = true
+
+
+label_pp = dp ? label.new(bar_index, pivot, text=display_value ? '         Pivot' + ' ' : 'P', style=label.style_none, textcolor=color.gray, size=l_size) : na
+label.delete(label_pp[1])
+label_bc = dp ? label.new(bar_index, bc, text=display_value ? '         BC' + ' ' : 'BC', style=label.style_none, textcolor=color.gray, size=l_size) : na
+label.delete(label_bc[1])
+label_tc = dp ? label.new(bar_index, tc, text=display_value ? '         TC' + ' ' : 'TC', style=label.style_none, textcolor=color.gray, size=l_size) : na
+label.delete(label_tc[1])
+label_r1 = dp ? label.new(bar_index, r1, text=display_value ? '         R1' + ' ' : 'R1', style=label.style_none, textcolor=color.red, size=l_size) : na
+label.delete(label_r1[1])
+label_r2 = dp ? label.new(bar_index, r2, text=display_value ? '         R2' + ' ' : 'R2', style=label.style_none, textcolor=color.red, size=l_size) : na
+label.delete(label_r2[1])
+label_r3 = dp ? label.new(bar_index, r3, text=display_value ? '         R3' + ' ' : 'R3', style=label.style_none, textcolor=color.red, size=l_size) : na
+label.delete(label_r3[1])
+label_s1 = dp ? label.new(bar_index, s1, text=display_value ? '         S1' + ' ' : 'S1', style=label.style_none, textcolor=color.green, size=l_size) : na
+label.delete(label_s1[1])
+label_s2 = dp ? label.new(bar_index, s2, text=display_value ? '         S2' + ' ' : 'S2', style=label.style_none, textcolor=color.green, size=l_size) : na
+label.delete(label_s2[1])
+label_s3 = dp ? label.new(bar_index, s3, text=display_value ? '         S3' + ' ' : 'S3', style=label.style_none, textcolor=color.green, size=l_size) : na
+label.delete(label_s3[1])
+
+dhigh = request.security(syminfo.tickerid, 'D', high[1], lookahead=barmerge.lookahead_on)
+dlow = request.security(syminfo.tickerid, 'D', low[1], lookahead=barmerge.lookahead_on)
+whigh = request.security(syminfo.tickerid, 'W', high[1], lookahead=barmerge.lookahead_on)
+wlow = request.security(syminfo.tickerid, 'W', low[1], lookahead=barmerge.lookahead_on)
+plot(dp and pivot ? pivot : na, title='Pivot', color=pivot != pivot[1] ? na : color.blue, linewidth=2, transp=30)
+
+plot(dp and bc ? bc : na, title='BC', color=bc != bc[1] ? na : color.gray, linewidth=2, transp=30)
+plot(dp and tc ? tc : na, title='TC', color=tc != tc[1] ? na : color.gray, linewidth=2, transp=30)
+plot(dp and r1 ? r1 : na, title='R1', color=r1 != r1[1] ? na : color.red, transp=30)
+plot(dp and r2 ? r2 : na, title='R2', color=r2 != r2[1] ? na : color.red, transp=30)
+plot(dp and r3 ? r3 : na, title='R3', color=r3 != r3[1] ? na : color.red, transp=30)
+plot(dp and s1 ? s1 : na, title='S1', color=s1 != s1[1] ? na : color.green, transp=30)
+plot(dp and s2 ? s2 : na, title='S2', color=s2 != s2[1] ? na : color.green, transp=30)
+plot(dp and s3 ? s3 : na, title='S3', color=s3 != s3[1] ? na : color.green, transp=30)
+
+
+
+
+
+dmasrc = close
+
+dmaoff = 3
+
+out = ta.sma(dmasrc, dmalen)
+p1 = plot(adma and out ? out : na, title='DMA', color=color.new(color.blue, 0), offset=dmaoff)
+
+deup = ta.crossunder(close, out[3]) and close[1] > out[4] and close[2] > out[5] and close[3] > out[6] and close[4] > out[7] and close[5] > out[8] and close[6] > out[9] and close[7] > out[10] and close[8] > out[11]
+delo = ta.crossover(close, out[3]) and close[1] < out[4] and close[2] < out[5] and close[3] < out[6] and close[4] < out[7] and close[5] < out[8] and close[6] < out[9] and close[7] < out[10] and close[8] < out[11]
+
+
+
+
+
+
+aselect1 = exponential ? ta.ema(close, enable_1am) : ta.sma(close, enable_1am)
+aselect2 = exponential ? ta.ema(close, enable_1bm) : ta.sma(close, enable_1bm)
+aselect3 = exponential ? ta.ema(close, enable_1cm) : ta.sma(close, enable_1cm)
+
+
+
+
+plot(enable_1a ? aselect1 : na, color=color.new(#D3FF00, 0), linewidth=1)
+plot(enable_1b ? aselect2 : na, color=color.new(#FF00B1, 0), linewidth=1)
+plot(enable_1c ? aselect3 : na, color=color.new(#C80000, 0), linewidth=1)
+
+
+
+
+cloudfillmasource = close
+
+
+
+
+f_smma(src, len) =>
+    cloudfillmasmma = 0.0
+    cloudfillmasmma := na(cloudfillmasmma[1]) ? ta.sma(src, len) : (cloudfillmasmma[1] * (len - 1) + src) / len
+    cloudfillmasmma
+
+f_hullma(src, length) =>
+    ta.wma(2 * ta.wma(src, length / 2) - ta.wma(src, length), math.round(math.sqrt(length)))
+
+f_tma(src, length) =>
+    ta.sma(ta.sma(src, length), length)
+
+f_dema(src, length) =>
+    emaValue = ta.ema(src, length)
+    2 * emaValue - ta.ema(emaValue, length)
+
+f_tema(src, length) =>
+    cloudfillmaema1 = ta.ema(src, length)
+    cloudfillmaema2 = ta.ema(cloudfillmaema1, length)
+    cloudfillmaema3 = ta.ema(cloudfillmaema2, length)
+    3 * cloudfillmaema1 - 3 * cloudfillmaema2 + cloudfillmaema3
+
+f_ma(smoothing, src, length) =>
+
+    rma_1 = ta.rma(src, length)
+    sma_1 = ta.sma(src, length)
+    ema_1 = ta.ema(src, length)
+    wma_1 = ta.wma(src, length)
+    vwma_1 = ta.vwma(src, length)
+    f_smma_1 = f_smma(src, length)
+    f_hullma_1 = f_hullma(src, length)
+    vwap_1 = ta.vwap(hlc3)
+    f_dema_1 = f_dema(src, length)
+    f_tema_1 = f_tema(src, length)
+    iff_1 = smoothing == 'TEMA' ? f_tema_1 : src
+    iff_2 = smoothing == 'DEMA' ? f_dema_1 : iff_1
+    iff_3 = smoothing == 'VWAP' ? vwap_1 : iff_2
+    iff_4 = smoothing == 'HullMA' ? f_hullma_1 : iff_3
+    iff_5 = smoothing == 'SMMA' ? f_smma_1 : iff_4
+    iff_6 = smoothing == 'VWMA' ? vwma_1 : iff_5
+    iff_7 = smoothing == 'WMA' ? wma_1 : iff_6
+    iff_8 = smoothing == 'EMA' ? ema_1 : iff_7
+    iff_9 = smoothing == 'SMA' ? sma_1 : iff_8
+    smoothing == 'RMA' ? rma_1 : iff_9
+
+cloudfillmaMA1 = f_ma(typeofMA1, cloudfillmasource, cloudfillmalength_ma1)
+cloudfillmaMA2 = f_ma(typeofMA1, cloudfillmasource, cloudfillmalength_ma2)
+
+plot_cloudfillmama1 = plot(enable_macloud ? cloudfillmaMA1 : na, color=color.new(color.green, 80), linewidth=2, title='MA1 Cloud')
+plot_cloudfillmama2 = plot(enable_macloud ? cloudfillmaMA2 : na, color=color.new(color.red, 80), linewidth=2, title='MA2 Cloud')
+cloudfillmafill_color = cloudfillmaMA1 > cloudfillmaMA2 ? color.new(color.green, 80) : color.new(color.red, 80)
+fill(plot_cloudfillmama1, plot_cloudfillmama2, color=cloudfillmafill_color)
+
+
+
+
+
+vwapFunction = ta.vwap(hlc3)
+vwapSecurity = request.security(syminfo.tickerid, '', vwapFunction)
+plot(enable_vwap ? vwapSecurity : na, title='VWAP', color=color.new(color.orange, 50), linewidth=3, editable=true)
+
+
+
+
+var bool show_labels = input(true, 'All Time High')
+highest_high() =>
+    var float h = 0.0
+    h := math.max(h, high)
+    h
+var high_1M = request.security(syminfo.tickerid, '1M', highest_high(), lookahead=barmerge.lookahead_off)
+var high_1W = request.security(syminfo.tickerid, '1W', highest_high(), lookahead=barmerge.lookahead_off)
+var high_1D = request.security(syminfo.tickerid, '1D', highest_high(), lookahead=barmerge.lookahead_off)
+var ATH = nz(high_1M, nz(high_1W, nz(high_1D, high)))
+ATH := math.max(high, nz(ATH[1], ATH))
+var ATH_label = show_labels ? label.new(bar_index, high, 'ATH', style=label.style_none, textcolor=color.lime, size=size.normal, size=l_size, yloc=yloc.abovebar) : na
+if ATH > ATH[1] and show_labels
+    label.set_xy(ATH_label, bar_index, ATH * 1.01)
+ATH_1pct = ATH * 0.99
+ATH_5pct = ATH * 0.95
+ATH_10pct = ATH * 0.90
+
+
+
+
+
+
+chk_yh = true
+chk_yl = true
+chk_th = true
+chk_tl = true
+chk_lwh = true
+chk_lwl = true
+chk_lmh = true
+chk_lml = true
+
+isess = session.regular
+t = ticker.new(syminfo.prefix, syminfo.ticker, session=isess)
+igaps = barmerge.gaps_off
+yesterdayHigh = request.security(t, 'D', high[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+yesterdayLow = request.security(t, 'D', low[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+lastweekHigh = request.security(t, 'W', high[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+lastweekLow = request.security(t, 'W', low[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+lastmonthHigh = request.security(t, 'M', high[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+lastmonthLow = request.security(t, 'M', low[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+todayHigh = request.security(t, 'D', high[0], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+todayLow = request.security(t, 'D', low[0], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+
+
+if disp_p_hllabels == true
+    if chk_yh == true and timeframe.isintraday == true
+        label YES_HIGH = label.new(bar_index, yesterdayHigh, '         PDH', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(YES_HIGH[1])
+    if chk_yl == true and timeframe.isintraday == true
+        label YES_LOW = label.new(bar_index, yesterdayLow, '         PDL', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(YES_LOW[1])
+    if chk_th == true and timeframe.isintraday == true
+        label TOD_HIGH = label.new(bar_index, todayHigh, '         TH', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(TOD_HIGH[1])
+    if chk_tl == true and timeframe.isintraday == true
+        label TOD_LOW = label.new(bar_index, todayLow, '         TL', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(TOD_LOW[1])
+    if chk_lwh == true and (timeframe.isintraday == true or timeframe.isdaily == true)
+        label LWEEK_HIGH = label.new(bar_index, lastweekHigh, '         PWH', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(LWEEK_HIGH[1])
+    if chk_lwl == true and (timeframe.isintraday == true or timeframe.isdaily == true)
+        label LWEEK_LOW = label.new(bar_index, lastweekLow, '         PWL', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(LWEEK_LOW[1])
+    if chk_lmh == true and (timeframe.isintraday == true or timeframe.isdaily == true or timeframe.isweekly == true)
+        label LMONTH_HIGH = label.new(bar_index, lastmonthHigh, '         PMH', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(LMONTH_HIGH[1])
+    if chk_lml == true and (timeframe.isintraday == true or timeframe.isdaily == true or timeframe.isweekly == true)
+        label LMONTH_LOW = label.new(bar_index, lastmonthLow, '         PMl', style=label.style_none, textcolor=color.gray, size=size.small, textalign=text.align_right)
+        label.delete(LMONTH_LOW[1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+a_Color_Type = 'Colored'
+
+
+
+a_Wicks = 'Wicks'
+
+a_width = 1
+a_Line_Type_In = 'Solid'
+
+a_Line_Type = a_Line_Type_In == 'Dashed' ? line.style_dashed : a_Line_Type_In == 'Dotted' ? line.style_dotted : line.style_solid
+
+a_trendline_nr = 3
+log_chart = false
+
+a_bar_time = time - time[1]
+
+a_Extension_Multiplier = a_Extensions == '  25' ? 1 : a_Extensions == '  50' ? 2 : a_Extensions == '  75' ? 3 : a_Extensions == ' 100' ? 4 : a_Extensions == ' 150' ? 6 : a_Extensions == ' 200' ? 8 : a_Extensions == ' 300' ? 12 : a_Extensions == ' 400' ? 16 : a_Extensions == ' 500' ? 20 : a_Extensions == ' 750' ? 30 : a_Extensions == '1000' ? 40 : a_Extensions == 'Infinate' ? 0 : na
+
+
+
+a_f_trendline(a__input_function, a__delay, a__only_up, a__extend) =>
+    // Calculate line coordinates (Ax,Ay) - (Bx,By)
+    var int a_Ax = 1
+    var int a_Bx = 1
+    var float a_By = 0
+    var float a_slope = 0
+    a_Ay = fixnan(a__input_function)
+    if ta.change(a_Ay) != 0
+        a_Ax := time[a__delay]
+        a_By := a_Ay[1]
+        a_Bx := a_Ax[1]
+        a_slope := log_chart ? (math.log(a_Ay) - math.log(a_By)) / (a_Ax - a_Bx) : (a_Ay - a_By) / (a_Ax - a_Bx)
+        a_slope
+    else
+        a_Ax := a_Ax[1]
+        a_Bx := a_Bx[1]
+        a_By := a_By[1]
+        a_By
+    // Draw trendlines
+    var line a_trendline = na
+    var int a_Axbis = 0
+    var float a_Aybis = 0
+    var bool a__xtend = true
+    a_extension_time = a_Extension_Multiplier * a_bar_time * 25
+    a_Axbis := a_Ax + a_extension_time
+    a_Aybis := log_chart ? a_Ay * math.exp(a_extension_time * a_slope) : a_Ay + a_extension_time * a_slope
+    if a_Extension_Multiplier != 0
+        a__xtend := false
+        a__xtend
+    if ta.change(a_Ay) != 0
+
+        a_line_color_Rising_Falling = a_slope * time < 0 ? a__only_up ? a_Rising_Upper_Falling_Lower ? a_Color_Type == 'Colored' ? color.gray : color.teal : na : a_Color_Type == 'Colored' ? color.aqua : color.teal : a__only_up ? a_Color_Type == 'Colored' ? color.purple : color.teal : a_Rising_Upper_Falling_Lower ? a_Color_Type == 'Colored' ? color.gray : color.teal : na
+        a_line_color_Not_Rising_Falling = a_slope * time < 0 ? a__only_up ? na : a_Color_Type == 'Colored' ? color.purple : color.teal : a__only_up ? a_Color_Type == 'Colored' ? color.aqua : color.teal : na
+
+        a_line_color = a_Show_Primary and not a_Rising_Upper_Falling_Lower ? a_line_color_Not_Rising_Falling : a_Show_Primary and a_Rising_Upper_Falling_Lower ? a_line_color_Rising_Falling : na
+
+        if not na(a_line_color)
+            a_trendline := line.new(a_Bx, a_By, a_Axbis, a_Aybis, xloc.bar_time, extend=a__xtend ? extend.right : extend.none, color=a_line_color, style=a_Line_Type, width=a_width)
+            a_trendline
+    [a_Bx, a_By, a_Axbis, a_Aybis, a_slope]
+
+
+a_line_get_price(a__start_time, a__start_price, a__slope, a__lookback_period, a__log_chart) =>
+    var float a_current_price = 0.0
+    a_elapsed_time = time - a__start_time
+    a_current_price := a__log_chart ? a__start_price * math.exp((a_elapsed_time - a__lookback_period * a_bar_time) * a__slope) : a__start_price + (a_elapsed_time - a__lookback_period * a_bar_time) * a__slope
+    a_current_price
+
+
+// Function to check for trendline crosses
+a_line_cross(a__check_value, a__start_time, a__start_price, a__slope, a__log_chart) =>
+    var float a_current_value = 0.0
+    var float a_previous_value = 0.0
+    // Get current and previous price for the trendline
+    a_current_value := a_line_get_price(a__start_time, a__start_price, a__slope, 0, a__log_chart)  // 0, a__log_chart)
+    a_previous_value := a_line_get_price(a__start_time, a__start_price, a__slope, 1, a__log_chart)  //1, a__log_chart)
+    // Return 1 for crossover, -1 for crossunder and 0 for no cross detected
+    a_cross = a__check_value[1] < a_previous_value and a__check_value > a_current_value ? 1 : a__check_value[1] > a_previous_value and a__check_value < a_current_value ? -1 : 0
+    a_cross
+
+
+// Calculate pivot points    
+a_high_point = ta.pivothigh(a_Wicks == 'Wicks' ? high : close > open ? close : open, a_len, a_len / 2)
+a_low_point = ta.pivotlow(a_Wicks == 'Wicks' ? low : close > open ? open : close, a_len, a_len / 2)
+
+// Call trendline function for high and low pivot points
+[a_phx1, a_phy1, a_phx2, a_phy2, a_slope_high] = a_f_trendline(a_high_point, a_len / 2, false, true)
+[a_plx1, a_ply1, a_plx2, a_ply2, a_slope_low] = a_f_trendline(a_low_point, a_len / 2, true, true)
+
+
+// Initialition of pseudo array to keep track of last 10 high and 10 low trendline values
+var int a_high_x0 = 0
+var float a_high_y0 = 0.0
+var float a_high_sl0 = 0.0
+var int a_high_x1 = 0
+var float a_high_y1 = 0.0
+var float a_high_sl1 = 0.0
+var int a_high_x2 = 0
+var float a_high_y2 = 0.0
+var float a_high_sl2 = 0.0
+var int a_high_x3 = 0
+var float a_high_y3 = 0.0
+var float a_high_sl3 = 0.0
+var int a_high_x4 = 0
+var float a_high_y4 = 0.0
+var float a_high_sl4 = 0.0
+var int a_high_x5 = 0
+var float a_high_y5 = 0.0
+var float a_high_sl5 = 0.0
+var int a_high_x6 = 0
+var float a_high_y6 = 0.0
+var float a_high_sl6 = 0.0
+var int a_high_x7 = 0
+var float a_high_y7 = 0.0
+var float a_high_sl7 = 0.0
+var int a_high_x8 = 0
+var float a_high_y8 = 0.0
+var float a_high_sl8 = 0.0
+var int a_high_x9 = 0
+var float a_high_y9 = 0.0
+var float a_high_sl9 = 0.0
+
+var int a_low_x0 = 0
+var float a_low_y0 = 0.0
+var float a_low_sl0 = 0.0
+var int a_low_x1 = 0
+var float a_low_y1 = 0.0
+var float a_low_sl1 = 0.0
+var int a_low_x2 = 0
+var float a_low_y2 = 0.0
+var float a_low_sl2 = 0.0
+var int a_low_x3 = 0
+var float a_low_y3 = 0.0
+var float a_low_sl3 = 0.0
+var int a_low_x4 = 0
+var float a_low_y4 = 0.0
+var float a_low_sl4 = 0.0
+var int a_low_x5 = 0
+var float a_low_y5 = 0.0
+var float a_low_sl5 = 0.0
+var int a_low_x6 = 0
+var float a_low_y6 = 0.0
+var float a_low_sl6 = 0.0
+var int a_low_x7 = 0
+var float a_low_y7 = 0.0
+var float a_low_sl7 = 0.0
+var int a_low_x8 = 0
+var float a_low_y8 = 0.0
+var float a_low_sl8 = 0.0
+var int a_low_x9 = 0
+var float a_low_y9 = 0.0
+var float a_low_sl9 = 0.0
+
+
+// If a new trendline is formed, shift all values in the array one place up and forget the last values
+if ta.change(fixnan(a_high_point)) != 0
+    a_high_x9 := a_high_x8
+    a_high_y9 := a_high_y8
+    a_high_sl9 := a_high_sl8
+    a_high_x8 := a_high_x7
+    a_high_y8 := a_high_y7
+    a_high_sl8 := a_high_sl7
+    a_high_x7 := a_high_x6
+    a_high_y7 := a_high_y6
+    a_high_sl7 := a_high_sl6
+    a_high_x6 := a_high_x5
+    a_high_y6 := a_high_y5
+    a_high_sl6 := a_high_sl5
+    a_high_x5 := a_high_x4
+    a_high_y5 := a_high_y4
+    a_high_sl5 := a_high_sl4
+    a_high_x4 := a_high_x3
+    a_high_y4 := a_high_y3
+    a_high_sl4 := a_high_sl3
+    a_high_x3 := a_high_x2
+    a_high_y3 := a_high_y2
+    a_high_sl3 := a_high_sl2
+    a_high_x2 := a_high_x1
+    a_high_y2 := a_high_y1
+    a_high_sl2 := a_high_sl1
+    a_high_x1 := a_high_x0
+    a_high_y1 := a_high_y0
+    a_high_sl1 := a_high_sl0
+    a_high_x0 := a_phx1
+    a_high_y0 := a_phy1
+    a_high_sl0 := a_slope_high
+    a_high_sl0
+
+if ta.change(fixnan(a_low_point)) != 0
+    a_low_x9 := a_low_x8
+    a_low_y9 := a_low_y8
+    a_low_sl9 := a_low_sl8
+    a_low_x8 := a_low_x7
+    a_low_y8 := a_low_y7
+    a_low_sl8 := a_low_sl7
+    a_low_x7 := a_low_x6
+    a_low_y7 := a_low_y6
+    a_low_sl7 := a_low_sl6
+    a_low_x6 := a_low_x5
+    a_low_y6 := a_low_y5
+    a_low_sl6 := a_low_sl5
+    a_low_x5 := a_low_x4
+    a_low_y5 := a_low_y4
+    a_low_sl5 := a_low_sl4
+    a_low_x4 := a_low_x3
+    a_low_y4 := a_low_y3
+    a_low_sl4 := a_low_sl3
+    a_low_x3 := a_low_x2
+    a_low_y3 := a_low_y2
+    a_low_sl3 := a_low_sl2
+    a_low_x2 := a_low_x1
+    a_low_y2 := a_low_y1
+    a_low_sl2 := a_low_sl1
+    a_low_x1 := a_low_x0
+    a_low_y1 := a_low_y0
+    a_low_sl1 := a_low_sl0
+    a_low_x0 := a_plx1
+    a_low_y0 := a_ply1
+    a_low_sl0 := a_slope_low
+    a_low_sl0
+
+
+// Check Trendline crosses for last X nr. of trendlines
+a_cross_high0 = not a_Rising_Upper_Falling_Lower and a_high_sl0 * time > 0 ? 0 : a_line_cross(close, a_high_x0, a_high_y0, a_high_sl0, log_chart)
+a_cross_low0 = not a_Rising_Upper_Falling_Lower and a_low_sl0 * time < 0 ? 0 : a_line_cross(close, a_low_x0, a_low_y0, a_low_sl0, log_chart)
+
+a_cross_high1 = not a_Rising_Upper_Falling_Lower and a_high_sl1 * time > 0 ? 0 : a_line_cross(close, a_high_x1, a_high_y1, a_high_sl1, log_chart)
+a_cross_low1 = not a_Rising_Upper_Falling_Lower and a_low_sl1 * time < 0 ? 0 : a_line_cross(close, a_low_x1, a_low_y1, a_low_sl1, log_chart)
+
+a_cross_high2 = not a_Rising_Upper_Falling_Lower and a_high_sl2 * time > 0 ? 0 : a_line_cross(close, a_high_x2, a_high_y2, a_high_sl2, log_chart)
+a_cross_low2 = not a_Rising_Upper_Falling_Lower and a_low_sl2 * time < 0 ? 0 : a_line_cross(close, a_low_x2, a_low_y2, a_low_sl2, log_chart)
+
+a_cross_high3 = not a_Rising_Upper_Falling_Lower and a_high_sl3 * time > 0 ? 0 : a_line_cross(close, a_high_x3, a_high_y3, a_high_sl3, log_chart)
+a_cross_low3 = not a_Rising_Upper_Falling_Lower and a_low_sl3 * time < 0 ? 0 : a_line_cross(close, a_low_x3, a_low_y3, a_low_sl3, log_chart)
+
+a_cross_high4 = not a_Rising_Upper_Falling_Lower and a_high_sl4 * time > 0 ? 0 : a_line_cross(close, a_high_x4, a_high_y4, a_high_sl4, log_chart)
+a_cross_low4 = not a_Rising_Upper_Falling_Lower and a_low_sl4 * time < 0 ? 0 : a_line_cross(close, a_low_x4, a_low_y4, a_low_sl4, log_chart)
+
+a_cross_high5 = not a_Rising_Upper_Falling_Lower and a_high_sl5 * time > 0 ? 0 : a_line_cross(close, a_high_x5, a_high_y5, a_high_sl5, log_chart)
+a_cross_low5 = not a_Rising_Upper_Falling_Lower and a_low_sl5 * time < 0 ? 0 : a_line_cross(close, a_low_x5, a_low_y5, a_low_sl5, log_chart)
+
+a_cross_high6 = not a_Rising_Upper_Falling_Lower and a_high_sl6 * time > 0 ? 0 : a_line_cross(close, a_high_x6, a_high_y6, a_high_sl6, log_chart)
+a_cross_low6 = not a_Rising_Upper_Falling_Lower and a_low_sl6 * time < 0 ? 0 : a_line_cross(close, a_low_x6, a_low_y6, a_low_sl6, log_chart)
+
+a_cross_high7 = not a_Rising_Upper_Falling_Lower and a_high_sl7 * time > 0 ? 0 : a_line_cross(close, a_high_x7, a_high_y7, a_high_sl7, log_chart)
+a_cross_low7 = not a_Rising_Upper_Falling_Lower and a_low_sl7 * time < 0 ? 0 : a_line_cross(close, a_low_x7, a_low_y7, a_low_sl7, log_chart)
+
+a_cross_high8 = not a_Rising_Upper_Falling_Lower and a_high_sl8 * time > 0 ? 0 : a_line_cross(close, a_high_x8, a_high_y8, a_high_sl8, log_chart)
+a_cross_low8 = not a_Rising_Upper_Falling_Lower and a_low_sl8 * time < 0 ? 0 : a_line_cross(close, a_low_x8, a_low_y8, a_low_sl8, log_chart)
+
+a_cross_high9 = not a_Rising_Upper_Falling_Lower and a_high_sl9 * time > 0 ? 0 : a_line_cross(close, a_high_x9, a_high_y9, a_high_sl9, log_chart)
+a_cross_low9 = not a_Rising_Upper_Falling_Lower and a_low_sl9 * time < 0 ? 0 : a_line_cross(close, a_low_x9, a_low_y9, a_low_sl9, log_chart)
+
+
+//table
+
+
+strat           =  "Bj Reversal"
+
+t3vis           =  false
+hemavis         =  false
+psarvis         = false 
+arrowvis        =  false 
+showTable       =  true
+disable         =  false
+
+tsistrat        =  "Fast"
+rsistrat        =  "Slow"
+
+
+rPrice          =  false
+
+i_alert_mode    =  alert.freq_once_per_bar
+BUY4            =  true
+SELL4           =  true
+REVUP           =  true
+REVDWN          =  true
+HCROSSUP        =  true
+HCROSSDWN       =  true 
+RSIUP           =  true
+RSIDWN          =  true
+RSIOB           =  true
+RSIOS           =  true
+RSICD           =  true
+DATA            =  true
+DTAT            =  true
+SARUP           =  true
+SARDWN          =  true
+
+textSize        = "small"
+tableYpos       =  "bottom"
+tableXpos       =  "right"
+
+
+
+aLength         =  5
+Length          = 8
+revTransp5      =  2
+revTransp8      = 2
+
+hemaslow        =  20
+hemaslow2       = 50
+hemaslow3       = 200
+hema1Transp     =  55 
+hema2Transp     = 45 
+hema3Transp     =  35
+
+
+
+longf           =  25
+shortf          = 5
+signalf         =  14
+lenf            =  5
+
+longs           = 25 
+shorts          = 13
+signals         = 13 
+lens            = 14
+start           =  .043
+inc             =  .043
+max             =  .34 
+
+
+
+
+var cell1       =  color.new    (color.black ,100)
+
+bjrev           =  strat        == "Bj Reversal"
+hema            =  strat        == "HEMA"
+trm             =  strat        == "TRM" 
+rsicol          =  strat        == "RSI Color"
+
+tsifast         =  tsistrat     == "Fast"
+tsislow         =  tsistrat     == "Slow" 
+
+rsifast         =  rsistrat     == "Fast"
+rsislow         =  rsistrat     == "Slow"
+
+
+shortvar        =  tsifast ?    shortf  : tsislow ? shorts   : na
+longvar         =  tsifast ?    longf   : tsislow ? longs    : na
+signalvar       =  tsifast ?    signalf : tsislow ? signals  : na
+
+len             =  tsifast ? lenf    :
+                   tsislow ? lens    :
+                   rsifast ? lenf    :
+                   rsislow ? lens    : lens
+
+
+
+_tilson(int _len) =>
+    axe1        =  ta.ema(close, _len)
+    axe2        =  ta.ema(axe1,  _len)
+    axe3        =  ta.ema(axe2,  _len)
+    axe4        =  ta.ema(axe3,  _len)
+    axe5        =  ta.ema(axe4,  _len)
+    axe6        =  ta.ema(axe5,  _len)
+    ab          =  0.7
+    ac1         =  -ab * ab   * ab
+    ac2         =  3   * ab   * ab+3* ab   * ab  * ab
+    ac3         =  -6  * ab   * ab-3* ab-3 * ab  * ab   * ab
+    ac4         =  1+3 * ab   + ab  * ab   * ab+3* ab   * ab
+    _return     =  ac1 * axe6 + ac2 * axe5 + ac3 * axe4 + ac4 * axe3
+
+_haVal()        =>
+    _c          =  (open + high + low + close) / 4
+    _o          =  float(na)
+    _o          := na(_o[1])  ? (open + close) / 2 : (nz(_o[1]) + nz(_c[1])) / 2
+    _h          =  math.max     (high , math.max     (_o,  _c))
+    _l          =  math.min     (low  , math.min     (_o,  _c))
+    [_o, _h, _l, _c]
+
+_alert(bool _x, string _y)  =>
+    if _x
+        alert      (_y + timeframe.period + ' chart. Price is ' + str.tostring(close), i_alert_mode)
+
+_triGrad(_source, _min, _max, _midCol, _bearCol, _bullCol) =>
+    var float _center = _min + (_max - _min) / 2
+    color     _return = _source >= _center ? 
+      color.from_gradient(_source, _center, _max, _midCol, _bullCol) : 
+      color.from_gradient(_source, _min, _center, _bearCol, _midCol)
+
+_populate(_n, _x, _y,  _col1, _col2) =>
+    if showTable 
+        for i = 0 to array.size(_x)-1
+            _a =     array.get (_x, i)
+            _s =     array.get (_y, i)
+            table.cell(table_id=_n, column=0, row=i, bgcolor=cell1,     text=_a, text_color=_col1, text_size=textSize)
+            table.cell(table_id=_n, column=1, row=i, bgcolor=color(na), text=_s, text_color=_col2, text_size=textSize)
+
+
+
+[o_,h_,l_,c_]   =  _haVal           ()
+
+tsi             =  ta.tsi           (close,     shortvar,   longvar )
+tsl             =  ta.ema           (tsi  ,     signalvar           )
+rsi             =  ta.rsi           (close,     len                 )
+
+anT3Average     =  _tilson          (aLength                        )
+nT3Average      =  _tilson          (Length                         )
+
+bjhemaslow      =  ta.ema           (o_   ,     hemaslow            )
+bjhemaslow2     =  ta.ema           (o_   ,     hemaslow2           )
+bjhemaslow3     =  ta.ema           (o_   ,     hemaslow3           )
+bjhemafast      =  ta.ema           (hl2  ,     1                   )
+
+sar             =  ta.sar           (start,     inc,        max     )
+
+
+
+hadu            =  c_ >=         o_
+
+buy1            =  ta.crossover     (tsi,tsl) and   rsi > 50
+buy2            =  ta.crossover     (rsi,50)  and   tsi > tsl
+buy3            =  ta.crossover     (tsi,tsl) and   ta.crossover    (rsi,50)
+
+sell1           =  ta.crossunder    (tsi,tsl) and   rsi < 50
+sell2           =  ta.crossunder    (rsi,50)  and   tsi < tsl
+sell3           =  ta.crossunder    (tsi,tsl) and   ta.crossunder   (rsi,50)
+
+rsicross        =  ta.cross         (rsi,           50) 
+rsiup           =  ta.crossover     (rsi,           50) 
+rsidwn          =  ta.crossunder    (rsi,           50) 
+rsiob           =  ta.crossover     (rsi,           70) 
+rsios           =  ta.crossunder    (rsi,           30) 
+rsicd           =  ta.crossunder    (rsi,           70) 
+rsicu           =  ta.crossover     (rsi,           30) 
+
+revbar          =  ta.cross         (close,         nT3Average)
+trendbar        =  ta.cross         (nT3Average,    anT3Average)
+revup           =  ta.crossover     (close,         nT3Average)
+revdwn          =  ta.crossunder    (close,         nT3Average)
+
+emasig          =  ta.cross         (close,         bjhemaslow)     and     ta.cross     (close,    bjhemaslow2)
+
+hemauc          =                   (close>         bjhemaslow)     and     (close >                bjhemaslow2)
+hemadc          =                   (close<         bjhemaslow)     and     (close <                bjhemaslow2)
+
+crossup1        =  ta.crossover     (close,         bjhemaslow)     and     (close >                bjhemaslow2)
+crossup2        =  ta.crossover     (close,         bjhemaslow2)    and     (close >                bjhemaslow)
+crossup3        =  ta.crossover     (close,         bjhemaslow2)    and     ta.crossover (close,    bjhemaslow)
+
+crossdown1      =  ta.crossunder    (close,         bjhemaslow)     and     (close <                bjhemaslow2)
+crossdown2      =  ta.crossunder    (close,         bjhemaslow2)    and     (close <                bjhemaslow)
+crossdown3      =  ta.crossunder    (close,         bjhemaslow2)    and     ta.crossunder(close,    bjhemaslow)
+
+sarup           =  ta.crossover     (close,         sar)
+sardwn          =  ta.crossunder    (close,         sar)
+
+Hcrossup        =  crossup1   or    crossup2   or   crossup3
+Hcrossdwn       =  crossdown1 or    crossdown2 or   crossdown3
+
+buy4            =  buy1  or buy2    or buy3
+sell4           =  sell1 or sell2   or sell3
+
+buy             =  tsi > tsl  and   rsi > 50
+sell            =  tsi < tsl  and   rsi < 50 
+
+data            =  tsi < tsl  and   tsi > tsi   [1]  
+dtat            =  tsi > tsl  and   tsi < tsi   [1]  
+
+colOne          =  anT3Average  >   anT3Average [1] 
+upCol           =  nT3Average   >   nT3Average  [1] 
+fillData        =  anT3Average  >   nT3Average   
+
+uc              =  (anT3Average >=  nT3Average) and (close > nT3Average) 
+dc              =  (anT3Average <=  nT3Average) and (close < nT3Average)   
+dr              =  (anT3Average >=  nT3Average) and (close < nT3Average)  
+ur              =  (anT3Average <=  nT3Average) and (close > nT3Average)  
+  
+hauc            =  (anT3Average >=  nT3Average) and (c_    > nT3Average) 
+hadc            =  (anT3Average <=  nT3Average) and (c_    < nT3Average) 
+hadr            =  (anT3Average >=  nT3Average) and (c_    < nT3Average) 
+haur            =  (anT3Average <=  nT3Average) and (c_    > nT3Average) 
+
+bjup              =  bjhemaslow   >   bjhemaslow  [1]
+bjup2             =  bjhemaslow2  >   bjhemaslow2 [1]
+bjup3             =  bjhemaslow3  >   bjhemaslow3 [1]
+
+hfillData       =  bjhemaslow   <   bjhemafast
+hfillDtat       =  bjhemaslow2  <   bjhemaslow
+hfillDat        =  bjhemaslow3  <   bjhemaslow2
+
+ema1            =  bjhemaslow   <   close
+ema2            =  bjhemaslow2  <   close
+ema3            =  bjhemaslow3  <   close
+
+sarUp           =  close        >=  sar
+rsiUp           =  rsi          >   50
+tsiUp           =  tsi          >   tsl
+rsiH            =  rsi          >=  90 or      rsi <= 10
+
+
+names           =  array.from(
+                   "TRM"                              ,
+                   "Rev"                              ,
+                   "Curl"                             ,
+                   "RSI"                              ,
+                   "TSI"                              ,
+                   "EMA " + str.tostring(hemaslow)    ,
+                   "EMA " + str.tostring(hemaslow2)   ,
+                   "EMA " + str.tostring(hemaslow3)   ,
+                   "SAR"                              )
+
+syms            =  array.from(
+                   buy   ? "✅" : sell ? "❌" : "➖" ,
+                   uc    ? "✅" : dc   ? "❌" : "🔸" , 
+                   data  ? "✅" : dtat ? "❌" : "➖" ,
+                   rsiH  ? "🔥": rsiUp ? "✅" : "❌" ,                           
+                   tsiUp ? "✅" :        "❌"        ,
+                   ema1  ? "✅" :        "❌"        ,
+                   ema2  ? "✅" :        "❌"        ,
+                   ema3  ? "✅" :        "❌"        ,
+                   sarUp ? "✅" :        "❌"        ) 
+
+sigs            =  array.from(
+                   buy   ?  1   : sell ?  -1   : 0    ,
+                   uc    ?  1   : dc   ?  -1   : 0    ,
+                   data  ?  1   : dtat ?  -1   : 0    ,
+                   rsiUp ?  1   :         -1          ,
+                   tsiUp ?  1   :         -1          ,
+                   ema1  ?  1   :         -1          ,
+                   ema2  ?  1   :         -1          ,
+                   ema3  ?  1   :         -1          ,
+                   sarUp ?  1   :         -1          ) 
+
+sigSum          = array.sum (sigs)
+
+tabCol          = _triGrad  (sigSum, -6, 6, color.gray, #ff0000, color.green)
+
+var stats       = table.new (position=tableYpos + "_" + tableXpos, columns=2, rows=9, border_color= color.new(color.gray, 60), border_width=1)
+
+_populate         (stats, names, syms, tabCol, tabCol)
+
+
+
+
+
+
+
+
+
+Periods = 10
+src = hl2
+Multiplier = 3.0
+changeATR = true
+showsignals = true
+highlighting = true
+atr2 = ta.sma(ta.tr, Periods)
+atr = changeATR ? ta.atr(Periods) : atr2
+up = src - Multiplier * atr
+up1 = nz(up[1], up)
+up := close[1] > up1 ? math.max(up, up1) : up
+dn = src + Multiplier * atr
+dn1 = nz(dn[1], dn)
+dn := close[1] < dn1 ? math.min(dn, dn1) : dn
+trend = 1
+trend := nz(trend[1], trend)
+trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
+buySignal = trend == 1 and trend[1] == -1
+plotshape(suptrnd and buySignal ? up : na, title='SupertrendUp',  text='ST',location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.green, 0))
+sellSignal = trend == -1 and trend[1] == 1
+plotshape(suptrnd and sellSignal ? dn : na, title='SupertrendDown', text='ST' ,location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.red, 0))
+
+//macd alert----------------------------------------------------------------------------------------
+
+col_grow_above = #26A69A
+col_grow_below = #FFCDD2
+col_fall_above = #B2DFDB
+col_fall_below = #EF5350
+col_macd = #0094ff
+col_signal = #ff6a00
+fast_ma = ta.ema(close, 12)
+slow_ma = ta.ema(close, 26)
+macd = fast_ma - slow_ma
+signal = ta.ema(macd, 9)
+hist = macd - signal
+macd_crossup = macd < 0 and ta.crossover(macd, signal)
+macd_crossdown = macd > 0 and ta.crossunder(macd, signal)
+plotshape(mcross and macd_crossup ? macd_crossup : na, title='buy', text='MCD', color=color.new(color.green, 30), style=shape.flag, location=location.bottom, size=size.tiny, textcolor=color.new(color.gray, 10))
+plotshape(mcross and macd_crossdown ? macd_crossdown : na, title='sell', text='MCD', color=color.new(color.red, 30), style=shape.flag, location=location.top, size=size.tiny, textcolor=color.new(color.gray, 10))
+
+//ma alert----------------------------------------------------------------------------------------
+ema1a = ta.ema(close, input(title='EMA1(Alert)', defval=50))
+ema2a = ta.ema(close, input(title='EMA2(Alert)', defval=200))
+
+longe = ta.crossover(ema1a, ema2a)
+shorte = ta.crossunder(ema1a, ema2a)
+
+plotshape(emacross and longe ? longe : na, title='Long EMA', title='EMABUY', text='EMA', color=color.new(color.green, 0), style=shape.triangleup, location=location.belowbar, size=size.tiny, textcolor=color.new(color.green, 10))
+plotshape(emacross and shorte ? shorte : na, title='Short EMA', title='EMASELL', text='EMA', color=color.new(color.red, 0), style=shape.triangledown, location=location.abovebar, size=size.tiny, textcolor=color.new(color.red, 10))
+
+ma1a = ta.sma(close, input(title='MA1(Alert)', defval=50))
+ma2a = ta.sma(close, input(title='MA2(Alert)', defval=200))
+
+long = ta.crossover(ma1a, ma2a)
+short = ta.crossunder(ma1a, ma2a)
+
+plotshape(macross and long ? long : na, title='Long MA', title='MABUY', text='MA', color=color.new(color.green, 0), style=shape.triangleup, location=location.belowbar, size=size.tiny, textcolor=color.new(color.green, 10))
+plotshape(macross and short ? short : na, title='Short MA', title='MASELL', text='MA', color=color.new(color.red, 0), style=shape.triangledown, location=location.abovebar, size=size.tiny, textcolor=color.new(color.red, 10))
+
+
+//srsi----------------------------------------------------------------------------------------
+
+smoothK = 3
+smoothD = 3
+lengthRSI = 14
+lengthStoch = 14
+
+
+
+
+
+
+
+rsi1 = ta.rsi(close, lengthRSI)
+k = ta.sma(ta.stoch(rsi1, rsi1, rsi1, lengthStoch), smoothK)
+d = ta.sma(k, smoothD)
+srsiu = ta.crossunder(k, d) ? d + 5 : na
+srsio = ta.crossover(k, d) ? d - 5 : na
+plotshape(srsicross and srsiu ? srsiu : na, title='SHORT SRSI', title='SHORT SRSI', text='SRS', color=color.new(color.green, 30), style=shape.diamond, location=location.bottom, size=size.tiny, textcolor=color.new(color.gray, 10))
+plotshape(srsicross and srsio ? srsio : na, title='LONG SRSI', title='LONG SRSI', text='SRS', color=color.new(color.red, 30), style=shape.diamond, location=location.top, size=size.tiny, textcolor=color.new(color.gray, 10))
+
+//vol----------------------------------------------------------------------------------------
+
+lengthVolume = 20
+
+volumeAlertTimes3 = 5
+volumeAlertTimes5 = 5
+volumeAlertTimes15 = 5
+volumeAlertTimes30 = 5
+volumeAlertTimes60 = 5
+volumeAlertTimesOther = 5
+
+percentageGapForSlopeshape = 1
+
+volumeAlertTimes = timeframe.period == '3' ? volumeAlertTimes3 : timeframe.period == '5' ? volumeAlertTimes5 : timeframe.period == '15' ? volumeAlertTimes15 : timeframe.period == '30' ? volumeAlertTimes30 : timeframe.period == '60' ? volumeAlertTimes60 : volumeAlertTimesOther
+
+volumeBreakout = volume > ta.sma(volume, lengthVolume)[1] * volumeAlertTimes
+
+plotshape(title='Big Volume', series=displayVolumeLabel and volumeBreakout and close > open, text='VOL', location=location.belowbar,  style=shape.circle,size=size.tiny, color=color.new(color.green, 0), textcolor=color.new(color.green, 0), size=size.tiny)
+plotshape(title='Big Volume', series=displayVolumeLabel and volumeBreakout and close < open, text='VOL', location=location.abovebar,  style=shape.circle,size=size.tiny, color=color.new(color.red, 0), textcolor=color.new(color.red, 0), size=size.tiny)
+
+
+//don----------------------------------------------------------------------------------------
+
+donlength = 20
+
+donupBound = ta.highest(high, donlength)
+dondownBound = ta.lowest(low, donlength)
+
+donLONG = ta.cross(high, donupBound)
+donSHORT = ta.cross(low, dondownBound)
+
+switch_1 = 0
+setA = 0
+setB = 0
+
+if donLONG and switch_1[1] == 0
+    switch_1 := 1
+    setA := 1
+    setB := 0
+    setB
+else
+    if donSHORT and switch_1[1] == 1
+        switch_1 := 0
+        setA := 0
+        setB := 1
+        setB
+    else
+        switch_1 := nz(switch_1[1], 0)
+        setA := 0
+        setB := 0
+        setB
+
+plotshape(don and setA ? setA : na, title=' Donchian LONG', style=shape.square, text='DC', color=color.new(color.green, 30), textcolor=color.new(color.gray, 30), location=location.bottom,size=size.tiny)
+plotshape(don and setB ? setB : na, title='Donchian SHORT', style=shape.square, text='DC', color=color.new(color.red, 30), textcolor=color.new(color.gray,30), location=location.top,size=size.tiny)
+
+
+
+//bollinger----------------------------------------------------------------------------------------
+
+bb_use_ema = false
+bb_length = 20
+bb_source = close
+bb_mult = 2.0
+
+fast_ma_len = 3
+
+nLengthSlow = 34
+nLengthFast = 5
+
+
+ema_1 = ta.ema(bb_source, bb_length)
+sma_1 = ta.sma(bb_source, bb_length)
+bb_basis = bb_use_ema ? ema_1 : sma_1
+bollfast_ma = ta.ema(bb_source, fast_ma_len)
+
+dev = ta.stdev(bb_source, bb_length)
+bb_dev_inner = bb_mult * dev
+
+inner_high = bb_basis + bb_dev_inner
+inner_low = bb_basis - bb_dev_inner
+
+xSMA1_hl2 = ta.sma(hl2, nLengthFast)
+xSMA2_hl2 = ta.sma(hl2, nLengthSlow)
+xSMA1_SMA2 = xSMA1_hl2 - xSMA2_hl2
+AO = xSMA1_SMA2 >= 0 ? xSMA1_SMA2 > xSMA1_SMA2[1] ? 1 : 2 : xSMA1_SMA2 > xSMA1_SMA2[1] ? -1 : -2
+
+break_down = ta.crossunder(bollfast_ma, bb_basis) and close < bb_basis and math.abs(AO) == 2
+break_up = ta.crossover(bollfast_ma, bb_basis) and close > bb_basis and math.abs(AO) == 1
+
+plotshape(bbc and break_down ? break_down : na , title='Bollinger Breakout Down', style=shape.square, location=location.top, size=size.tiny, text='BB', textcolor=color.new(color.gray, 30), color=color.new(color.red, 30))
+plotshape(bbc and break_up ? break_up : na , title='Bollinger Breakout Up', style=shape.square, location=location.bottom, size=size.tiny, text='BB', textcolor=color.new(color.gray, 30), color=color.new(color.green, 30))
+
+
+
+
+psarstart = 0.02
+increment = 0.02
+maximum = 0.02
+width = 2
+highlightStartPoints = true
+showLabels = true
+highlightState = true
+
+psar = ta.sar(psarstart, increment, maximum)
+dir = psar < close ? 1 : -1
+
+psarColor = dir == 1 ? #3388bb : #fdcc02
+
+
+var color longColor = color.green
+var color shortColor = color.red
+
+psarbuySignal = dir == 1 and dir[1] == -1
+
+plotshape(psarbuySignal and showLabels ? psar : na, title='Buy Label', text='PSA', location=location.bottom, style=shape.square, size=size.tiny, color=color.new(longColor, 30), textcolor=color.new(color.gray, 30))
+
+psarsellSignal = dir == -1 and dir[1] == 1
+
+plotshape(psarsellSignal and showLabels ? psar : na, title='Sell Label', text='PSA', location=location.top, style=shape.square, size=size.tiny, color=color.new(shortColor, 30), textcolor=color.new(color.gray, 30))
+
+
+
+left            =  50
+right           =   20
+nPiv            =  4
+atrLen          =   30
+mult            =   0.3
+per             =   5.0
+srdsrc             =    "High/Low Body"
+alignZones      =  true
+extend          =  false
+
+
+
+lookback        = 2
+swing           = 5
+bullCol         =   #6cf664
+bearCol         =   #f6646c
+bgTransp        =   85
+bordTransp      =   50
+
+bullBreak       =   #010c01
+bearBreak       =   #010c01
+bullTransp      =   100
+bearTransp      =   100
+
+resBreakCol     =   #010c01
+supBreakCol     =  #010c01
+resBreakTransp  =  100
+supBreakTransp  =100
+
+falseBullCol    =   #010c01
+falseBearCol    =  #010c01
+falseBullTransp =   100
+falseBearTransp = 100
+arrowMax        =  100
+moveBull        =  #010c01
+moveBear        =  #010c01
+moveBullTransp  =  100
+moveBearTransp  = 100
+
+
+
+
+sync            =   bar_index
+confirmed       =   barstate.isconfirmed
+extrap          =   extend ?        extend.right :  extend.none
+var pivotHigh   =   array.new_box   (nPiv)
+var pivotLows   =   array.new_box   (nPiv)  
+var highBull    =   array.new_bool  (nPiv)
+var lowsBull    =   array.new_bool  (nPiv)
+var bullBorder  =   color.new       (bullCol,       bordTransp)
+var bullBgCol   =   color.new       (bullCol,       bgTransp)
+var bearBorder  =   color.new       (bearCol,       bordTransp)
+var bearBgCol   =   color.new       (bearCol,       bgTransp)
+var srdupCol       =   color.new       (bullBreak,     bullTransp)
+var dnCol       =   color.new       (bearBreak,     bearTransp)
+var supCol      =   color.new       (resBreakCol,   resBreakTransp)
+var resCol      =   color.new       (supBreakCol,   supBreakTransp)
+
+
+
+haSrc           =   srdsrc ==          "HA"    
+hiLoSrc         =   srdsrc ==          "High/Low"
+
+
+_haBody()       =>
+    haClose     =   (open + high  +  low  + close)    / 4
+    haOpen      =   float(na)
+    haOpen      :=  na(haOpen[1]) ? (open + close)    / 2 : 
+                   (nz(haOpen[1]) + nz(haClose[1]))   / 2
+    
+    [haOpen, haClose]
+
+_extend(_x) =>
+    for i = 0 to               array.size       (_x)-1
+        box.set_right          (array.get       (_x, i), sync)
+        
+_arrayLoad(_x, _max, _val) =>  
+    array.unshift                               (_x,   _val)   
+    if  array.size                              (_x) > _max
+        array.pop                               (_x)
+
+_arrayBox(_x, _max, _val) =>  
+    array.unshift                               (_x,   _val)   
+    if       array.size                         (_x) > _max
+        _b = array.pop                          (_x)
+        if extend
+            box.set_extend                      (_b, extend.none)
+
+_box(_x1, _t, _b, _boCol, _bgCol) =>
+    box.new(                   _x1, _t, sync,   _b, 
+     xloc        =             xloc.bar_index,
+     extend      =             extrap,
+     border_color=             _boCol,   
+     bgcolor     =             _bgCol) 
+
+_getBox(_x,_i)   =>
+    _box         =             array.get        (_x,_i)
+    _t           =             box.get_top      (_box)
+    _b           =             box.get_bottom   (_box)
+    [_t, _b]
+    
+_align(_x,_y)    =>
+    for i = 0 to               array.size       (_x) -1
+        [_T, _B] =             _getBox          (_y, 0)
+        [_t, _b] =             _getBox          (_x, i)
+        if _T > _b and         _T < _t or 
+           _B < _t and         _B > _b or 
+           _T > _t and         _B < _b or 
+           _B > _b and         _T < _t
+            box.set_top        (array.get       (_y, 0), _t)
+            box.set_bottom     (array.get       (_y, 0), _b)
+ 
+_color(_x, _y)     =>
+    var int _track = nPiv
+    for i = 0 to               array.size       (_x) -1
+        [t_, b_] =             _getBox          (_x, i)
+        _isBull  =             array.get        (_y, i)
+        if close > t_ and not  _isBull
+            box.set_extend(    array.get        (_x, i), extend.none)
+            array.set(_x, i,   _box             (sync  , t_, b_, bullBorder, bullBgCol))
+            array.set(_y, i,   true)
+            _track += 1
+        if close < b_ and _isBull
+            box.set_extend(    array.get        (_x, i), extend.none)
+            array.set(_x, i,   _box             (sync  , t_, b_, bearBorder, bearBgCol))
+            array.set(_y, i,   false)
+            _track -= 1
+    _track
+
+_detect(_x,_y)      =>
+    int  _i         = 0
+    bool _found     = false
+    bool _isBull    = na
+    while (not _found and _i <  array.size      (_x)  )
+        [t_, b_] =              _getBox         (_x,_i)
+        if low < t_ and high >  b_
+            _isBull :=          array.get       (_y,_i)
+            _found  :=          true
+        _i          +=          1
+    [_found, _isBull]
+
+_falseBreak(_l)      =>       
+    bool _d         = false
+    bool _u         = false
+    for i = 1 to lookback
+        if _l[i] < _l and _l[i+1] >= _l and _l[1] < _l 
+            _d      := true
+        if _l[i] > _l and _l[i+1] <= _l and _l[1] > _l 
+            _u      := true
+    [_d, _u]
+
+_numLevel(_x,_y)    =>
+    int _above      = 0
+    int _fill       = 0
+    for i = 0 to                array.size      (_x)-1
+        _isBull     =           array.get       (_x,i)
+        if  _isBull
+            _above += 1
+        if  not na(_isBull)
+            _fill  += 1
+    for i = 0 to                array.size      (_y)-1
+        _isBull     =           array.get       (_y,i)
+        if  _isBull
+            _above += 1
+        if  not na(_isBull)
+            _fill  += 1
+    [_above, _fill]  
+
+_check(_srdsrc,_l) =>
+    bool _check = false
+    for i = 0 to _l
+        if _srdsrc[i]
+            _check := true
+    _check
+
+
+highest         =   close ==            ta.highest      (close,     right)
+lowest          =   close ==            ta.lowest       (close,     right)
+
+closeLows       =   ta.lowest           (close,          swing)
+closeHigh       =   ta.highest          (close,          swing)
+
+[open_, close_] =   _haBody             ()
+
+hiHaBod         =   math.max            (close_,        open_)
+loHaBod         =   math.min            (close_,        open_)
+
+hiBod           =   math.max            (close,         open)
+loBod           =   math.min            (close,         open)
+
+srcHigh         =   haSrc ?             hiHaBod :       hiLoSrc ?   high :      hiBod
+srcLow          =   haSrc ?             loHaBod :       hiLoSrc ?   low  :      loBod
+
+pivot_high      =   ta.pivothigh        (srcHigh,       left,       right)
+pivot_low       =   ta.pivotlow         (srcLow,        left,       right)
+
+perc            =   close*              (per/100)
+srdatr             =   ta.atr              (atrLen)*       mult
+
+band            =   math.min            (srdatr,           perc)       [right]     /2
+
+HH              =   pivot_high+         band
+HL              =   pivot_high-         band
+
+LH              =   pivot_low+          band
+LL              =   pivot_low-          band
+
+coDiff          =   close -             open
+
+
+
+if pivot_high and   dhighs and  confirmed
+    _arrayLoad      (highBull , nPiv,   false)      
+    _arrayBox       (pivotHigh, nPiv,   _box            (sync[right], HH, HL, bearBorder, bearBgCol))
+
+if pivot_low and    dlows and   confirmed
+    _arrayLoad      (lowsBull , nPiv,   true)      
+    _arrayBox       (pivotLows, nPiv,   _box            (sync[right], LH, LL, bullBorder, bullBgCol))
+
+if alignZones
+    _align          (pivotHigh,         pivotHigh)
+    _align          (pivotHigh,         pivotLows)    
+    _align          (pivotLows,         pivotLows)
+    _align          (pivotLows,         pivotHigh)
+
+_extend             (pivotHigh)
+_extend             (pivotLows)
+
+trackHigh       =   _color              (pivotHigh,     highBull)
+trackLows       =   _color              (pivotLows,     lowsBull)
+
+
+
+isLows          =   closeLows      ==   close
+isHigh          =   closeHigh      ==   close
+
+wasLows         =   _check              (isLows,        lookback)
+wasHigh         =   _check              (isHigh,        lookback)
+
+[above, total]  =   _numLevel           (highBull,      lowsBull)
+
+moveAbove       =   trackHigh       >   trackHigh[1]
+moveBelow       =   trackLows       <   trackLows[1]
+
+resBreak        =   (trackLows      >   trackLows[1]    or  moveAbove) 
+supBreak        =   (trackHigh      <   trackHigh[1]    or  moveBelow) 
+
+breakOut        =   moveAbove     and   highest and     above == total             
+breakDwn        =   moveBelow     and   lowest  and     above == 0         
+
+[dh, uh]        =   _falseBreak         (trackHigh) 
+[dl, ul]        =   _falseBreak         (trackLows) 
+
+falseBreakBull  =   wasLows       and   (dh or dl)
+falseBreakBear  =   wasHigh       and   (uh or ul)
+
+[fh,hb]         =   _detect             (pivotHigh,     highBull)
+[fl,lb]         =   _detect             (pivotLows,     lowsBull)
+
+bullCheck       =   not resBreak  and   not resBreak[1] and (fh or fl) and  close > open and     (hb or lb)
+bearCheck       =   not supBreak  and   not supBreak[1] and (fh or fl) and  close < open and not (hb or lb)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
